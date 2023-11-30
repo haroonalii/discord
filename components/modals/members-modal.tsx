@@ -1,4 +1,5 @@
 "use client";
+import qs from "query-string";
 
 import {
   Dialog,
@@ -12,21 +13,93 @@ import { useModal } from "@/hooks/use-modal-store";
 import { ServerWithMemberWithProfiles } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserAvatar } from "@/components/user-avatar";
-import { ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  MoreVertical,
+  ShieldQuestion,
+  Shield,
+  Check,
+  Gavel,
+  Loader2,
+} from "lucide-react";
+import { useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuTrigger,
+  DropdownMenuSubTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MemberRole } from "@prisma/client";
+import axios from "axios";
+import { useRouter } from "next/navigation";
 
-// this will render an icon depending on the role of the user in the server 
+// this will render an icon depending on the role of the user in the server
 const roleIconMap = {
-  "GUEST": null,
-  "MODERATOR": <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />,
-  "ADMIN": <ShieldAlert className="h-4 w-4 text-rose-500" />
-}
+  GUEST: null,
+  MODERATOR: <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />,
+  ADMIN: <ShieldAlert className="h-4 w-4 text-rose-500" />,
+};
 
 export const MembersModal = () => {
+  const router = useRouter();
   const { onOpen, isOpen, onClose, type, data } = useModal();
+  // LoadingID for specific users
+  const [loadingId, setLoadingId] = useState("");
 
   // a constant which will watch whether this modal is open or not
   const isModalOpen = isOpen && type === "members";
   const { server } = data as { server: ServerWithMemberWithProfiles };
+
+  // on kicking a user from a channel
+  const onKick = async (memberId: string) => {
+    try {
+      setLoadingId(memberId);
+      const url = qs.stringifyUrl({
+        url: `/api/members/${memberId}`,
+        query: {
+          serverId: server?.id,
+        },
+      });
+
+      const response = await axios.delete(url);
+
+      router.refresh();
+      onOpen("members", { server: response.data });
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoadingId("");
+    }
+  };
+
+  // on changing the role of user
+  const onRoleChange = async (memberId: string, role: MemberRole) => {
+    try {
+      setLoadingId(memberId);
+      const url = qs.stringifyUrl({
+        url: `/api/members/${memberId}`,
+        query: {
+          serverId: server?.id,
+        },
+      });
+
+      // role as an change and url as returning value
+      const response = await axios.patch(url, { role });
+      // to update our server components
+      router.refresh();
+      onOpen("members", { server: response.data });
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoadingId("");
+    }
+  };
 
   return (
     <Dialog open={isModalOpen} onOpenChange={onClose}>
@@ -52,8 +125,10 @@ export const MembersModal = () => {
                   {/* this will render an icon depending on the role of the user  */}
                   {roleIconMap[member.role]}
                 </div>
+                {/* to render the user's mail  */}
                 <p className="text-xs text-zinc-500">{member.profile.email}</p>
               </div>
+              {/* to show the options/actions for the users  */}
               {server.profileId !== member.profileId &&
                 loadingId !== member.id && (
                   <div className="ml-auto">
@@ -74,6 +149,7 @@ export const MembersModal = () => {
                               >
                                 <Shield className="h-4 w-4 mr-2" />
                                 Guest
+                                {/* if the member is guest  */}
                                 {member.role === "GUEST" && (
                                   <Check className="h-4 w-4 ml-auto" />
                                 )}
@@ -101,6 +177,7 @@ export const MembersModal = () => {
                     </DropdownMenu>
                   </div>
                 )}
+              {/* to show small spinner  */}
               {loadingId === member.id && (
                 <Loader2 className="animate-spin text-zinc-500 ml-auto w-4 h-4" />
               )}
